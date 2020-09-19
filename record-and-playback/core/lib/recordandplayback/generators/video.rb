@@ -43,12 +43,12 @@ module BigBlueButton
     split_users.each do |single_user|
       if single_user.nil?
         # This will contain all webcam videos not in the split user list
-        webcam_edl << BigBlueButton::Events.create_webcam_edl(
+        webcam_edl = BigBlueButton::Events.create_webcam_edl(
                         events, "#{temp_dir}/#{meeting_id}", nil, split_users)
         target_filename = "#{target_dir}/webcams"
       else
         # Pull out webcam events and videos only for a specific user
-        webcam_edl << BigBlueButton::Events.create_webcam_edl(
+        webcam_edl = BigBlueButton::Events.create_webcam_edl(
                         events, "#{temp_dir}/#{meeting_id}", [single_user], nil)
         target_filename = "#{target_dir}/webcam_#{single_user}"
       end
