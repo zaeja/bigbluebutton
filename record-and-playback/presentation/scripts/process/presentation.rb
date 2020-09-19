@@ -227,8 +227,19 @@ if not FileTest.directory?(target_dir)
         webcam_height = presentation_props['deskshare_output_height']
       end
 
+      # If metadata exists requesting a user be processed into a separate webcam file, do this.
+      split_users = Array.new
+      metadata_split_webcam_user = @doc.at_xpath("//metadata/@splitWebcamUser")
+      if metadata_split_webcam_user.nil?
+        BigBlueButton.logger.info("Monash customisation: No need to split on user webcam.")
+        split_users = []
+      else
+        split_users = [metadata_split_webcam_user.value]
+        BigBlueButton.logger.info("Monash customisation: Will split webcam video for user #{split_users[0]}")
+      end
+
       processed_audio_file = BigBlueButton::AudioProcessor.get_processed_audio_file("#{temp_dir}/#{meeting_id}", "#{target_dir}/audio")
-      BigBlueButton.process_webcam_videos(target_dir, temp_dir, meeting_id, webcam_width, webcam_height, presentation_props['audio_offset'], processed_audio_file, presentation_props['video_formats'])
+      BigBlueButton.process_webcam_videos(target_dir, temp_dir, meeting_id, webcam_width, webcam_height, presentation_props['audio_offset'], processed_audio_file, presentation_props['video_formats'], split_users)
     end
 
     if !Dir["#{raw_archive_dir}/deskshare/*"].empty? and presentation_props['include_deskshare']

@@ -101,7 +101,7 @@ module BigBlueButton
     end
 
     # Build a webcam EDL
-    def self.create_webcam_edl(events, archive_dir)
+    def self.create_webcam_edl(events, archive_dir, include_users = nil, exclude_users = nil)
       recording = events.at_xpath('/recording')
       meeting_id = recording['meeting_id']
       event = events.at_xpath('/recording/event[position()=1]')
@@ -133,37 +133,43 @@ module BigBlueButton
         end
         raise "Couldn't determine webcam filename" if filename.nil?
 
-        # Add the video to the EDL
-        case event['eventname']
-        when 'StartWebcamShareEvent', 'StartWebRTCShareEvent'
-          videos[filename] = { :timestamp => timestamp }
-          active_videos << filename
+        # Determine if this user webcam should be excluded or not
+        user_id = event.at_xpath('userId').text
+        exclude_this_user = ( !exclude_users.nil? and exclude_users.include?(user_id) ) or ( !include_users.nil? and !include_users.include?(user_id) )
 
-          edl_entry = {
-            :timestamp => timestamp,
-            :areas => { :webcam => [] }
-          }
-          active_videos.each do |filename|
-            edl_entry[:areas][:webcam] << {
-              :filename => filename,
-              :timestamp => timestamp - videos[filename][:timestamp]
-            }
-          end
-          video_edl << edl_entry
-        when 'StopWebcamShareEvent', 'StopWebRTCShareEvent'
-          active_videos.delete(filename)
+        unless exclude_this_user
+          # Add the video to the EDL
+          case event['eventname']
+          when 'StartWebcamShareEvent', 'StartWebRTCShareEvent'
+            videos[filename] = { :timestamp => timestamp }
+            active_videos << filename
 
-          edl_entry = {
-            :timestamp => timestamp,
-            :areas => { :webcam => [] }
-          }
-          active_videos.each do |filename|
-            edl_entry[:areas][:webcam] << {
-              :filename => filename,
-              :timestamp => timestamp - videos[filename][:timestamp]
+            edl_entry = {
+              :timestamp => timestamp,
+              :areas => { :webcam => [] }
             }
+            active_videos.each do |filename|
+              edl_entry[:areas][:webcam] << {
+                :filename => filename,
+                :timestamp => timestamp - videos[filename][:timestamp]
+              }
+            end
+            video_edl << edl_entry
+          when 'StopWebcamShareEvent', 'StopWebRTCShareEvent'
+            active_videos.delete(filename)
+
+            edl_entry = {
+              :timestamp => timestamp,
+              :areas => { :webcam => [] }
+            }
+            active_videos.each do |filename|
+              edl_entry[:areas][:webcam] << {
+                :filename => filename,
+                :timestamp => timestamp - videos[filename][:timestamp]
+              }
+            end
+            video_edl << edl_entry
           end
-          video_edl << edl_entry
         end
       end
 
