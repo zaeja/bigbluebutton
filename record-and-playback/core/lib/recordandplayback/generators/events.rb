@@ -173,11 +173,12 @@ module BigBlueButton
             video_edl << edl_entry
           end
         end
+      end
 
-        video_edl << {
-          :timestamp => final_timestamp - initial_timestamp,
-          :areas => { :webcam => [] }
-        }
+      video_edl << {
+        :timestamp => final_timestamp - initial_timestamp,
+        :areas => { :webcam => [] }
+      }
 
       return video_edl
     end
