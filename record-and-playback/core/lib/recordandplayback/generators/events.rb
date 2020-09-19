@@ -27,7 +27,7 @@ require 'set'
 
 module BigBlueButton
   module Events
-  
+
     # Get the total number of participants
     def self.get_num_participants(events)
       participants_ids = Set.new
@@ -64,31 +64,31 @@ module BigBlueButton
       external_meeting_id = metadata['meetingId'] if !metadata['meetingId'].nil?
       external_meeting_id
     end
-    
+
     # Get the timestamp of the first event.
     def self.first_event_timestamp(events)
       first_event = events.at_xpath('/recording/event[position() = 1]')
       first_event['timestamp'].to_i if first_event && first_event.key?('timestamp')
     end
-    
+
     # Get the timestamp of the last event.
     def self.last_event_timestamp(events)
       last_event = events.at_xpath('/recording/event[position() = last()]')
       last_event['timestamp'].to_i if last_event && last_event.key?('timestamp')
-    end  
-    
+    end
+
     # Determine if the start and stop event matched.
-    def self.find_video_event_matched(start_events, stop)      
+    def self.find_video_event_matched(start_events, stop)
       BigBlueButton.logger.info("Task: Finding video events that match")
       start_events.each do |start|
         if (start[:stream] == stop[:stream])
           return start
-        end      
+        end
       end
       return nil
     end
-    
-    # Get start video events  
+
+    # Get start video events
     def self.get_start_video_events(events)
       start_events = []
       events.xpath("/recording/event[@eventname='StartWebcamShareEvent']").each do |start_event|
@@ -101,7 +101,7 @@ module BigBlueButton
     end
 
     # Build a webcam EDL
-    def self.create_webcam_edl(events, archive_dir)
+    def self.create_webcam_edl(events, archive_dir, include_users = nil, exclude_users = nil)
       recording = events.at_xpath('/recording')
       meeting_id = recording['meeting_id']
       event = events.at_xpath('/recording/event[position()=1]')
@@ -127,50 +127,57 @@ module BigBlueButton
         when 'StartWebcamShareEvent', 'StopWebcamShareEvent'
           stream = event.at_xpath('stream').text
           filename = "#{video_dir}/#{stream}.flv"
+          user_id = event.at_xpath('userId').text
         when 'StartWebRTCShareEvent', 'StopWebRTCShareEvent'
           uri = event.at_xpath('filename').text
           filename = "#{video_dir}/#{File.basename(uri)}"
+          user_id = event.at_xpath('userId').text
         end
         raise "Couldn't determine webcam filename" if filename.nil?
 
-        # Add the video to the EDL
-        case event['eventname']
-        when 'StartWebcamShareEvent', 'StartWebRTCShareEvent'
-          videos[filename] = { :timestamp => timestamp }
-          active_videos << filename
+        # Determine if this user webcam should be excluded or not
+        include_this_user = ( exclude_users.nil? || !exclude_users.include?(user_id) ) and ( include_users.nil? || include_users.include?(user_id) )
 
-          edl_entry = {
-            :timestamp => timestamp,
-            :areas => { :webcam => [] }
-          }
-          active_videos.each do |filename|
-            edl_entry[:areas][:webcam] << {
-              :filename => filename,
-              :timestamp => timestamp - videos[filename][:timestamp]
-            }
-          end
-          video_edl << edl_entry
-        when 'StopWebcamShareEvent', 'StopWebRTCShareEvent'
-          active_videos.delete(filename)
+        unless !include_this_user
+          # Add the video to the EDL
+          case event['eventname']
+          when 'StartWebcamShareEvent', 'StartWebRTCShareEvent'
 
-          edl_entry = {
-            :timestamp => timestamp,
-            :areas => { :webcam => [] }
-          }
-          active_videos.each do |filename|
-            edl_entry[:areas][:webcam] << {
-              :filename => filename,
-              :timestamp => timestamp - videos[filename][:timestamp]
+            videos[filename] = { :timestamp => timestamp }
+            active_videos << filename
+
+            edl_entry = {
+              :timestamp => timestamp,
+              :areas => { :webcam => [] }
             }
+            active_videos.each do |filename|
+              edl_entry[:areas][:webcam] << {
+                :filename => filename,
+                :timestamp => timestamp - videos[filename][:timestamp]
+              }
+            end
+            video_edl << edl_entry
+          when 'StopWebcamShareEvent', 'StopWebRTCShareEvent'
+            active_videos.delete(filename)
+
+            edl_entry = {
+              :timestamp => timestamp,
+              :areas => { :webcam => [] }
+            }
+            active_videos.each do |filename|
+              edl_entry[:areas][:webcam] << {
+                :filename => filename,
+                :timestamp => timestamp - videos[filename][:timestamp]
+              }
+            end
+            video_edl << edl_entry
           end
-          video_edl << edl_entry
         end
-      end
 
-      video_edl << {
-        :timestamp => final_timestamp - initial_timestamp,
-        :areas => { :webcam => [] }
-      }
+        video_edl << {
+          :timestamp => final_timestamp - initial_timestamp,
+          :areas => { :webcam => [] }
+        }
 
       return video_edl
     end
@@ -224,7 +231,7 @@ module BigBlueButton
     end
 
     def self.get_stop_deskshare_events(events)
-      BigBlueButton.logger.info("Task: Getting stop DESKSHARE events")      
+      BigBlueButton.logger.info("Task: Getting stop DESKSHARE events")
       stop_events = []
       events.xpath('/recording/event[@module="Deskshare" or (@module="bbb-webrtc-sfu" and @eventname="StopWebRTCDesktopShareEvent")]').each do |stop_event|
         case stop_event['eventname']
@@ -492,7 +499,7 @@ module BigBlueButton
       end
       rec_events.sort_by {|a| a[:timestamp]}
     end
-    
+
     # Match recording start and stop events
     def self.match_start_and_stop_rec_events(rec_events)
       BigBlueButton.logger.info ("Matching record events")
